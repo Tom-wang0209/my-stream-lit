@@ -10,7 +10,6 @@ DEEPSEEK_API_KEY = "sk-ebed2ac63e5a44d590dbebcb8346f9cd"
 DEEPSEEK_API_URL = "https://api.deepseek.com/v1/chat/completions"
 OLLAMA_API_URL = "http://localhost:11434/api/generate"
 
-# 统一模型元数据驱动字典
 MODELS = {
     'deepseek-chat': {'name': 'DeepSeek Chat', 'type': 'api', 'description': '官方旗舰模型'},
     'deepseek-reasoning': {'name': 'DeepSeek R1', 'type': 'api', 'description': '官方推理模型'},
@@ -21,7 +20,7 @@ MODELS = {
 # ==================== 全局页面配置 ====================
 st.set_page_config(page_title="Code Hub", layout="wide")
 
-# ==================== 核心状态机状态持久化初始化 ====================
+# ==================== 核心状态机初始化 ====================
 if 'logged_in' not in st.session_state:
     st.session_state.logged_in = False
 if 'username' not in st.session_state:
@@ -43,500 +42,194 @@ if 'show_guide' not in st.session_state:
 if 'show_settings' not in st.session_state:
     st.session_state.show_settings = False
 
-# ==================== 纯净极客风三大背景主题 CSS ====================
-BLACK_THEME = """
-<style>
-.stApp {
-    background: linear-gradient(135deg, #0d1117 0%, #161b22 50%, #0d1117 100%);
-    min-height: 100vh;
-}
-[data-testid="stAppViewContainer"] { background: transparent !important; }
-[data-testid="stHeader"] {
-    background: rgba(13, 17, 23, 0.8) !important;
-    backdrop-filter: blur(10px);
-    border-bottom: 1px solid #30363d;
-}
-[data-testid="stSidebar"] {
-    background: rgba(22, 27, 34, 0.95) !important;
-    backdrop-filter: blur(10px);
-    border-right: 1px solid #30363d;
-}
-.stTextInput>div>div>input,
-.stTextArea>div>div>textarea,
-.stSelectbox>div>div>select {
-    background-color: #21262d !important;
-    color: #c9d1d9 !important;
-    border: 1px solid #30363d !important;
-}
-.stButton>button {
-    background: linear-gradient(90deg, #21262d 0%, #30363d 100%);
-    color: #c9d1d9;
-    border: 1px solid #30363d;
-    border-radius: 6px;
-}
-.stButton>button:hover {
-    border-color: #58a6ff;
-    color: #58a6ff;
-}
-.chat-bubble {
-    background-color: #21262d;
-    color: #c9d1d9;
-    padding: 1rem;
-    border-radius: 8px;
-    margin: 0.5rem 0;
-}
-.analysis-card {
-    padding: 1rem;
-    border-radius: 8px;
-    margin: 0.5rem 0;
-    border-left: 4px solid;
-    background-color: #161b22;
-}
-.highlight { border-color: #238636; }
-.bug { border-color: #da3633; }
-.suggestion { border-color: #a371f7; }
-h1, h2, h3, h4, h5, h6, p, span, div, label { color: #c9d1d9 !important; }
-</style>
-"""
+# ==================== 防截断：动态样式加载引擎 ====================
+# 将复杂的 CSS 扁平化整合为单行注入，彻底杜绝多行三引号截断 Bug
+theme_bg = "#0d1117" if st.session_state.theme in ['black', 'starry'] else "#f6f8fa"
+theme_text = "#c9d1d9" if st.session_state.theme in ['black', 'starry'] else "#24292f"
+theme_box = "#21262d" if st.session_state.theme in ['black', 'starry'] else "#ffffff"
 
-WHITE_THEME = """
-<style>
-.stApp {
-    background: linear-gradient(135deg, #f6f8fa 0%, #ffffff 50%, #f6f8fa 100%);
-    min-height: 100vh;
-}
-[data-testid="stAppViewContainer"] { background: transparent !important; }
-[data-testid="stHeader"] {
-    background: rgba(255, 255, 255, 0.8) !important;
-    backdrop-filter: blur(10px);
-    border-bottom: 1px solid #e1e4e8;
-}
-[data-testid="stSidebar"] {
-    background: rgba(255, 255, 255, 0.95) !important;
-    backdrop-filter: blur(10px);
-    border-right: 1px solid #e1e4e8;
-}
-.stTextInput>div>div>input,
-.stTextArea>div>div>textarea,
-.stSelectbox>div>div>select {
-    background-color: #ffffff !important;
-    color: #24292f !important;
-    border: 1px solid #e1e4e8 !important;
-}
-.stButton>button {
-    background: linear-gradient(90deg, #ffffff 0%, #f6f8fa 100%);
-    color: #24292f;
-    border: 1px solid #e1e4e8;
-    border-radius: 6px;
-}
-.stButton>button:hover {
-    border-color: #0969da;
-    color: #0969da;
-}
-.chat-bubble {
-    background-color: #f6f8fa;
-    color: #24292f;
-    padding: 1rem;
-    border-radius: 8px;
-    margin: 0.5rem 0;
-}
-.analysis-card {
-    padding: 1rem;
-    border-radius: 8px;
-    margin: 0.5rem 0;
-    border-left: 4px solid;
-    background-color: #ffffff;
-}
-.highlight { border-color: #1a7f37; }
-.bug { border-color: #cf222e; }
-.suggestion { border-color: #8250df; }
-h1, h2, h3, h4, h5, h6, p, span, div, label { color: #24292f !important; }
-</style>
-"""
+st.markdown(f"""<style>
+.stApp {{ background: {theme_bg} !important; }}
+h1, h2, h3, h4, h5, h6, p, span, div, label {{ color: {theme_text} !important; }}
+.stTextInput>div>div>input, .stTextArea>div>div>textarea, .stSelectbox>div>div>select {{ background-color: {theme_box} !important; color: {theme_text} !important; }}
+.stButton>button {{ background: {theme_box}; color: {theme_text}; border-radius: 6px; }}
+.stButton>button:hover {{ border-color: #58a6ff; color: #58a6ff; }}
+.stars-container {{ position: fixed; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 0; }}
+.star {{ position: absolute; background: white; border-radius: 50%; animation: twinkle 3s infinite ease-in-out; }}
+@keyframes twinkle {{ 0%, 100% {{ opacity: 0.3; }} 50% {{ opacity: 1; }} }}
+</style>""", unsafe_allow_html=True)
 
-STARRY_THEME = """
-<style>
-.stApp {
-    background: radial-gradient(ellipse at bottom, #1b2735 0%, #090a0f 100%);
-    min-height: 100vh;
-}
-[data-testid="stAppViewContainer"] { background: transparent !important; }
-[data-testid="stHeader"] {
-    background: rgba(9, 10, 15, 0.8) !important;
-    backdrop-filter: blur(10px);
-    border-bottom: 1px solid #30363d;
-}
-[data-testid="stSidebar"] {
-    background: rgba(9, 10, 15, 0.9) !important;
-    backdrop-filter: blur(10px);
-    border-right: 1px solid #30363d;
-}
-.stars-container {
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    pointer-events: none;
-    z-index: 0;
-}
-.star {
-    position: absolute;
-    background: white;
-    border-radius: 50%;
-    animation: twinkle 3s infinite ease-in-out;
-}
-@keyframes twinkle {
-    0%, 100% { opacity: 0.3; transform: scale(1); }
-    50% { opacity: 1; transform: scale(1.2); }
-}
-.stTextInput>div>div>input,
-.stTextArea>div>div>textarea,
-.stSelectbox>div>div>select {
-    background-color: rgba(33, 38, 45, 0.8) !important;
-    color: #c9d1d9 !important;
-    border: 1px solid #30363d !important;
-}
-.stButton>button {
-    background: rgba(33, 38, 45, 0.6);
-    color: #c9d1d9;
-    border: 1px solid #30363d;
-    border-radius: 6px;
-}
-.stButton>button:hover {
-    border-color: #58a6ff;
-    color: #58a6ff;
-}
-h1, h2, h3, h4, h5, h6, p, span, div, label { color: #c9d1d9 !important; }
-</style>
-"""
-
-# 分发渲染全局视觉主题
-if st.session_state.theme == 'black':
-    st.markdown(BLACK_THEME, unsafe_allow_html=True)
-elif st.session_state.theme == 'white':
-    st.markdown(WHITE_THEME, unsafe_allow_html=True)
-elif st.session_state.theme == 'starry':
-    st.markdown(STARRY_THEME, unsafe_allow_html=True)
-    stars_html = '<div class="stars-container">'
-    for _ in range(60):
-        x = f"{random.randint(0, 100)}%"
-        y = f"{random.randint(0, 100)}%"
-        size = f"{random.randint(1, 3)}px"
-        duration = f"{random.randint(2, 5)}s"
-        stars_html += f'<div class="star" style="left:{x}; top:{y}; width:{size}; height:{size}; animation-duration:{duration};"></div>'
-    stars_html += '</div>'
+if st.session_state.theme == 'starry':
+    stars_html = '<div class="stars-container">' + ''.join([f'<div class="star" style="left:{random.randint(0,100)}%; top:{random.randint(0,100)}%; width:{random.randint(1,3)}px; height:{random.randint(1,3)}px; animation-duration:{random.randint(2,5)}s;"></div>' for _ in range(30)]) + '</div>'
     st.markdown(stars_html, unsafe_allow_html=True)
 
-# ==================== 云端与本地混合算力请求网关 ====================
-def call_deepseek_api(messages, model='deepseek-chat'):
-    try:
-        headers = {
-            'Content-Type': 'application/json',
-            'Authorization': f'Bearer {DEEPSEEK_API_KEY}'
-        }
-        payload = {
-            'model': model,
-            'messages': messages,
-            'temperature': 0.7
-        }
-        response = requests.post(DEEPSEEK_API_URL, headers=headers, json=payload, timeout=60)
-        response.raise_for_status()
-        return response.json()['choices'][0]['message']['content']
-    except Exception as e:
-        return f"API Endpoint Connection Failed: {str(e)}"
-
-def call_ollama_api(prompt, model='qwen2.5-coder:7b'):
-    try:
-        payload = {'model': model, 'prompt': prompt, 'stream': False}
-        response = requests.post(OLLAMA_API_URL, json=payload, timeout=60)
-        response.raise_for_status()
-        return response.json().get('response', 'Empty compute feedback.')
-    except Exception as e:
-        return f"Local Ollama cluster offline. Please check terminal status: {str(e)}"
-
+# ==================== 算力请求网关 ====================
 def get_ai_response(messages, model):
-    model_info = MODELS.get(model, MODELS['deepseek-chat'])
-    if model_info['type'] == 'api':
-        return call_deepseek_api(messages, model)
+    if MODELS[model]['type'] == 'api':
+        try:
+            headers = {'Content-Type': 'application/json', 'Authorization': f'Bearer {DEEPSEEK_API_KEY}'}
+            payload = {'model': model, 'messages': messages, 'temperature': 0.7}
+            return requests.post(DEEPSEEK_API_URL, headers=headers, json=payload, timeout=60).json()['choices'][0]['message']['content']
+        except Exception as e: return f"API Pipeline Error: {str(e)}"
     else:
-        prompt = '\n'.join([f"{m['role']}: {m['content']}" for m in messages])
-        return call_ollama_api(prompt, model)
+        try:
+            prompt = '\n'.join([f"{m['role']}: {m['content']}" for m in messages])
+            return requests.post(OLLAMA_API_URL, json={'model': model, 'prompt': prompt, 'stream': False}, timeout=60).json().get('response', 'Compute Error')
+        except Exception as e: return f"Local Runtime Offline: {str(e)}"
 
-def analyze_code_structure(code):
-    lines = code.split('\n')
-    return {
-        'stats': {
-            'total_lines': len(lines), 
-            'effective_lines': len([l for l in lines if l.strip()]), 
-            'empty_lines': len([l for l in lines if not l.strip()])
-        }
-    }
-
-# ==================== 顶端极客高级控制工具栏 (对齐右上角官方 Share 组件) ====================
+# ==================== 右上角高级工具栏 (Deploy 同排下方) ====================
 st.markdown('<div style="position: relative; z-index: 999; margin-top: -10px;">', unsafe_allow_html=True)
-col_toolbar_spacer, col_btn_guide, col_sel_theme, col_btn_auth = st.columns([5, 1.5, 1.5, 1.5])
+col_tb_space, col_tb_guide, col_tb_theme, col_tb_auth = st.columns([5, 1.5, 1.5, 1.5])
 
-with col_btn_guide:
-    if st.button("Ollama Guide", use_container_width=True, key="toolbar_guide"):
+with col_tb_guide:
+    if st.button("Ollama Guide", use_container_width=True):
         st.session_state.show_guide = not st.session_state.show_guide
         st.session_state.show_settings = False
         st.rerun()
 
-with col_sel_theme:
+with col_tb_theme:
     theme_map = {'black': 'Geek Black', 'white': 'Soft White', 'starry': 'Starry Sky'}
-    selected_theme = st.selectbox(
-        "Theme Switcher", 
-        list(theme_map.keys()), 
-        format_func=lambda x: theme_map[x], 
-        index=list(theme_map.keys()).index(st.session_state.theme), 
-        label_visibility="collapsed",
-        key="toolbar_theme"
-    )
+    selected_theme = st.selectbox("Theme", list(theme_map.keys()), format_func=lambda x: theme_map[x], index=list(theme_map.keys()).index(st.session_state.theme), label_visibility="collapsed")
     if selected_theme != st.session_state.theme:
         st.session_state.theme = selected_theme
         st.rerun()
 
-with col_btn_auth:
+with col_tb_auth:
     if st.session_state.logged_in:
-        if st.button("Log Out", use_container_width=True, key="toolbar_logout"):
+        if st.button("Log Out", use_container_width=True):
             st.session_state.logged_in = False
             st.session_state.show_settings = False
             st.rerun()
     else:
-        st.markdown("<div style='text-align: center; line-height: 38px; color: #8b949e; font-size: 0.9rem; border: 1px dashed #30363d; border-radius: 6px;'>Session Locked</div>", unsafe_allow_html=True)
+        st.markdown("<div style='text-align: center; line-height: 38px; color: #8b949e; border: 1px dashed #30363d; border-radius: 6px; font-size: 0.9rem;'>Locked</div>", unsafe_allow_html=True)
 st.markdown('</div>', unsafe_allow_html=True)
 
-# ==================== 全屏级别子页面路由拦截层 ====================
-# 1. 登录会话主拦截
+# ==================== 独立页面路由拦截 ====================
 if not st.session_state.logged_in:
     st.markdown("<div style='height: 100px;'></div>", unsafe_allow_html=True)
-    col_login_l, col_login_box, col_login_r = st.columns([1.5, 1, 1.5])
-    with col_login_box:
-        st.markdown("<h2 style='text-align: center; margin-bottom: 30px; letter-spacing: 1px;'>Code Hub Gateway</h2>", unsafe_allow_html=True)
-        in_user = st.text_input("Operator Username", placeholder="Input root identity credential", key="login_field_user")
-        in_pass = st.text_input("Access Token Secret", type="password", placeholder="Input token payload", key="login_field_pass")
-        st.markdown("<div style='height: 10px;'></div>", unsafe_allow_html=True)
-        if st.button("Verify Credentials", use_container_width=True, key="login_submit_trigger"):
+    _, login_box, _ = st.columns([1.5, 1, 1.5])
+    with login_box:
+        st.markdown("<h2 style='text-align: center;'>Code Hub Gateway</h2>", unsafe_allow_html=True)
+        in_user = st.text_input("Username", placeholder="Identity identity credential")
+        in_pass = st.text_input("Password", type="password", placeholder="Access token secret")
+        if st.button("Verify Credentials", use_container_width=True):
             if in_user == st.session_state.username and in_pass == st.session_state.password:
                 st.session_state.logged_in = True
                 st.rerun()
-            else:
-                st.error("Authentication rejected: Invalid credential hash")
+            else: st.error("Access rejected")
     st.stop()
 
-# 2. 沉浸式全屏 Ollama 指引子框架
 if st.session_state.show_guide:
-    st.markdown("<div style='padding: 30px 50px;'>", unsafe_allow_html=True)
-    if st.button("← Return to Workspace Core", key="guide_back_btn"):
+    if st.button("← Return to Workspace Core"):
         st.session_state.show_guide = False
         st.rerun()
-    
     st.markdown("""
-    ## Local Computational Intelligence Runtime Architecture Guide
-    
+    ## Local Architecture Infrastructure Setup Guide
     ---
-    
-    ### Step 1: Deploy Engine Substrate
-    Fetch the corresponding host environment installation binaries package directly from the primary gateway [ollama.com](https://ollama.com) and execute cross-platform provisioning setup.
-    
-    ### Step 2: Initialize Local Model Shards via Terminal Core
-    Open your native shell orchestrator or command matrix and pull down the optimized operational weights using the following operations:
+    1. **Download Local Runtime Core**: Install the client core tool directly from [ollama.com](https://ollama.com).
+    2. **Deploy Computational Models**: Open your native terminal and pull down the optimized models layer:
     ```bash
     ollama run qwen2.5-coder:7b
     ```
-    ```bash
-    ollama run deepseek-r1:8b
-    ```
-    
-    ### Step 3: Daemon Monitoring Check
-    Confirm the connection hub adapter pipeline is working under backend address: `http://localhost:11434`. 
-    Once active, Code Hub's hardware selector box will automatically ingest and parse requests through your regional compute nodes.
+    3. **Connection Listener**: Ensure background engine mapping adapter is alive at port `http://localhost:11434`.
     """)
-    st.markdown("</div>", unsafe_allow_html=True)
     st.stop()
 
-# ==================== 侧边栏：历史会话结构设计 (宽度比例 2:8) ====================
+# ==================== 侧边栏及设置 ====================
 with st.sidebar:
-    st.markdown("<h2 style='margin-bottom:0;'>Code Hub</h2>", unsafe_allow_html=True)
-    st.markdown("<p style='color:#8b949e; font-size:0.8rem; margin-top:0;'>Hybrid Compute Matrix</p>", unsafe_allow_html=True)
-    st.markdown("---")
-    
-    if st.button("New Session Panel", use_container_width=True, key="sidebar_new_chat"):
+    st.markdown("## Code Hub Workspace")
+    if st.button("New Session Panel", use_container_width=True):
         st.session_state.messages = []
         st.session_state.current_conversation = None
         st.rerun()
-        
     st.markdown("---")
-    hist_search = st.text_input("Filter Token Query", placeholder="Search history clusters...", key="sidebar_search_field", label_visibility="collapsed")
-    st.markdown("<div style='height: 10px;'></div>", unsafe_allow_html=True)
-    
-    # 会话槽扁平化列表管理
+    hist_search = st.text_input("Filter History", placeholder="Search...", label_visibility="collapsed")
     for idx, conv in enumerate(st.session_state.conversations):
         if not hist_search or hist_search.lower() in conv['title'].lower():
-            col_sidebar_item, col_sidebar_action = st.columns([4, 1])
-            with col_sidebar_item:
-                if st.button(conv['title'], key=f"sidebar_item_trigger_{idx}", use_container_width=True):
+            c_card, c_del = st.columns([4, 1])
+            with c_card:
+                if st.button(conv['title'], key=f"hist_{idx}", use_container_width=True):
                     st.session_state.messages = conv['messages'].copy()
                     st.session_state.current_conversation = conv
                     st.rerun()
-            with col_sidebar_action:
-                if st.button("Clear", key=f"sidebar_item_delete_{idx}", use_container_width=True):
+            with c_del:
+                if st.button("Clear", key=f"del_{idx}", use_container_width=True):
                     st.session_state.conversations.pop(idx)
-                    if st.session_state.current_conversation == conv:
-                        st.session_state.current_conversation = None
-                        st.session_state.messages = []
                     st.rerun()
-                    
     st.markdown("---")
-    if st.button("Security Credentials Management", use_container_width=True, key="sidebar_security_settings"):
+    if st.button("Security Settings", use_container_width=True):
         st.session_state.show_settings = not st.session_state.show_settings
         st.rerun()
 
-# ==================== 动态凭证安全修改模块面板 ====================
 if st.session_state.show_settings:
-    st.markdown("### Profile Security Management Center")
-    col_settings_u, col_settings_p = st.columns(2)
-    with col_settings_u:
-        modified_username = st.text_input("Update Target Username", value=st.session_state.username, key="set_user_input")
-    with col_settings_p:
-        modified_password = st.text_input("Update Access Token Secret", value=st.session_state.password, type="password", key="set_pass_input")
-    
-    col_settings_act1, col_settings_act2 = st.columns([1, 4])
-    with col_settings_act1:
-        if st.button("Save Changes", key="set_save_trigger"):
-            st.session_state.username = modified_username
-            st.session_state.password = modified_password
-            st.session_state.show_settings = False
-            st.success("Credentials updated successfully.")
-            st.rerun()
-    with col_settings_act2:
-        if st.button("Cancel Modification", key="set_cancel_trigger"):
-            st.session_state.show_settings = False
-            st.rerun()
+    st.markdown("### Configuration Management Center")
+    m_user = st.text_input("Update Username", value=st.session_state.username)
+    m_pass = st.text_input("Update Password", value=st.session_state.password, type="password")
+    if st.button("Save Profile Changes"):
+        st.session_state.username = m_user
+        st.session_state.password = m_pass
+        st.session_state.show_settings = False
+        st.success("Credentials updated.")
+        st.rerun()
     st.stop()
 
-# ==================== 主系统核心业务区分发控制层 ====================
-col_view_lbl, col_view_selector = st.columns([5, 5])
-with col_view_selector:
-    st.session_state.selected_model = st.selectbox(
-        "Hardware Model Compute Infrastructure Driver",
-        list(MODELS.keys()),
-        format_func=lambda x: f"{MODELS[x]['name']} - {MODELS[x]['description']}",
-        index=list(MODELS.keys()).index(st.session_state.selected_model),
-        key="main_compute_selector"
-    )
+# ==================== 主工作台引擎分发 ====================
+_, col_engine = st.columns([5, 5])
+with col_engine:
+    st.session_state.selected_model = st.selectbox("Compute Engine", list(MODELS.keys()), format_func=lambda x: f"{MODELS[x]['name']} - {MODELS[x]['description']}")
 
-# 主运行区切分为双工作面板
-tab_workbench, tab_framework = st.tabs(["Code Hub Work Bench", "Cross-Language Framework Architect"])
+tab_workbench, tab_framework = st.tabs(["Code Hub Work Bench", "Framework Architect"])
 
-# ==================== 标签页 1: Code Hub 工作台业务流 ====================
+# 标签页 1 流控
 with tab_workbench:
-    display_container_workbench = st.container()
-    with display_container_workbench:
+    chat_container = st.container()
+    with chat_container:
         for msg in st.session_state.messages:
             if msg.get("section") == "workbench":
-                with st.chat_message(msg["role"]):
-                    st.markdown(msg["content"])
-                if msg["role"] == "assistant" and "analysis" in msg:
-                    an_payload = msg["analysis"]
-                    st.markdown(
-                        f"<div class='analysis-card highlight'><strong>Code Structure Insights Report:</strong><br>"
-                        f"Lines total: {an_payload['stats']['total_lines']} | "
-                        f"Effective source count: {an_payload['stats']['effective_lines']} | "
-                        f"Empty slots: {an_payload['stats']['empty_lines']}</div>", 
-                        unsafe_allow_html=True
-                    )
-
-    # ChatGPT 样式底部锚定输入域
-    user_query_workbench = st.chat_input("Paste disordered source artifacts or assign modification tasks here...", key="terminal_input_workbench")
-    if user_query_workbench:
-        st.session_state.messages.append({"role": "user", "content": user_query_workbench, "section": "workbench"})
+                with st.chat_message(msg["role"]): st.markdown(msg["content"])
+    user_query = st.chat_input("Paste disorganized source artifacts here...", key="input_wb")
+    if user_query:
+        st.session_state.messages.append({"role": "user", "content": user_query, "section": "workbench"})
         st.rerun()
-
-    # 异步触发逻辑回调机制
     if st.session_state.messages and st.session_state.messages[-1]["role"] == "user" and st.session_state.messages[-1].get("section") == "workbench":
-        with display_container_workbench:
-            with st.chat_message("user"):
-                st.markdown(st.session_state.messages[-1]["content"])
+        with chat_container:
+            with st.chat_message("user"): st.markdown(st.session_state.messages[-1]["content"])
             with st.chat_message("assistant"):
-                with st.spinner("Processing architectural refactoring logic..."):
-                    runtime_system_prompt = {
-                        "role": "system", 
-                        "content": "You are Code Hub Workbench expert. Refactor provided structures and print optimized blocks clearly."
-                    }
-                    active_conversation_flow = [m for m in st.session_state.messages if m.get("section") == "workbench"]
-                    formatted_api_payload = [{"role": m["role"], "content": m["content"]} for m in active_conversation_flow]
-                    
-                    ai_feedback_content = get_ai_response([runtime_system_prompt] + formatted_api_payload, st.session_state.selected_model)
-                    st.markdown(ai_feedback_content)
-                    
-                    computed_analysis_metrics = analyze_code_structure(ai_feedback_content)
-                    st.session_state.messages.append({
-                        "role": "assistant", 
-                        "content": ai_feedback_content, 
-                        "section": "workbench", 
-                        "analysis": computed_analysis_metrics
-                    })
-                    
-                    # 历史会话快照同步归档
+                with st.spinner("Refactoring..."):
+                    sys_p = {"role": "system", "content": "You are Code Hub Workbench expert. Refactor code and print modified blocks."}
+                    flow = [m for m in st.session_state.messages if m.get("section") == "workbench"]
+                    res = get_ai_response([sys_p] + [{"role": m["role"], "content": m["content"]} for m in flow], st.session_state.selected_model)
+                    st.markdown(res)
+                    st.session_state.messages.append({"role": "assistant", "content": res, "section": "workbench"})
                     if st.session_state.current_conversation is None:
-                        current_time_stamp = datetime.now().strftime('%H:%M')
-                        st.session_state.conversations.insert(0, {
-                            'title': f"Code Optimization {current_time_stamp}", 
-                            'messages': st.session_state.messages.copy()
-                        })
+                        st.session_state.conversations.insert(0, {'title': f"Optimization {datetime.now().strftime('%H:%M')}", 'messages': st.session_state.messages.copy()})
                         st.session_state.current_conversation = st.session_state.conversations[0]
-                    else:
-                        st.session_state.current_conversation['messages'] = st.session_state.messages.copy()
+                    else: st.session_state.current_conversation['messages'] = st.session_state.messages.copy()
                     st.rerun()
 
-# ==================== 标签页 2: 跨语言架构设计器业务流 ====================
+# 标签页 2 流控
 with tab_framework:
-    display_container_architect = st.container()
-    with display_container_architect:
+    arch_container = st.container()
+    with arch_container:
         for msg in st.session_state.messages:
             if msg.get("section") == "architect":
-                with st.chat_message(msg["role"]):
-                    st.markdown(msg["content"])
-
-    # ChatGPT 样式底部锚定输入域
-    user_query_architect = st.chat_input("Describe your custom high-concurrency cross-platform blueprint systems requirements...", key="terminal_input_architect")
-    if user_query_architect:
-        st.session_state.messages.append({"role": "user", "content": user_query_architect, "section": "architect"})
+                with st.chat_message(msg["role"]): st.markdown(msg["content"])
+    user_arch = st.chat_input("Describe blueprints system requirements...", key="input_arch")
+    if user_arch:
+        st.session_state.messages.append({"role": "user", "content": user_arch, "section": "architect"})
         st.rerun()
-
-    # 异步触发逻辑回调机制
     if st.session_state.messages and st.session_state.messages[-1]["role"] == "user" and st.session_state.messages[-1].get("section") == "architect":
-        with display_container_architect:
-            with st.chat_message("user"):
-                st.markdown(st.session_state.messages[-1]["content"])
+        with arch_container:
+            with st.chat_message("user"): st.markdown(st.session_state.messages[-1]["content"])
             with st.chat_message("assistant"):
-                with st.spinner("Compiling cross-language full-stack component blueprint trees..."):
-                    runtime_system_prompt = {
-                        "role": "system", 
-                        "content": "You are Code Hub Full-Stack Framework Architect. Design comprehensive file systems trees and mark code blocks cleanly."
-                    }
-                    active_conversation_flow = [m for m in st.session_state.messages if m.get("section") == "architect"]
-                    formatted_api_payload = [{"role": m["role"], "content": m["content"]} for m in active_conversation_flow]
-                    
-                    ai_feedback_content = get_ai_response([runtime_system_prompt] + formatted_api_payload, st.session_state.selected_model)
-                    st.markdown(ai_feedback_content)
-                    
-                    st.session_state.messages.append({
-                        "role": "assistant", 
-                        "content": ai_feedback_content, 
-                        "section": "architect"
-                    })
-                    
-                    # 历史会话快照同步归档
+                with st.spinner("Architecting..."):
+                    sys_p = {"role": "system", "content": "You are Code Hub Architect. Design folder structure trees and mark modules."}
+                    flow = [m for m in st.session_state.messages if m.get("section") == "architect"]
+                    res = get_ai_response([sys_p] + [{"role": m["role"], "content": m["content"]} for m in flow], st.session_state.selected_model)
+                    st.markdown(res)
+                    st.session_state.messages.append({"role": "assistant", "content": res, "section": "architect"})
                     if st.session_state.current_conversation is None:
-                        current_time_stamp = datetime.now().strftime('%H:%M')
-                        st.session_state.conversations.insert(0, {
-                            'title': f"Architecture Template {current_time_stamp}", 
-                            'messages': st.session_state.messages.copy()
-                        })
+                        st.session_state.conversations.insert(0, {'title': f"Architecture {datetime.now().strftime('%H:%M')}", 'messages': st.session_state.messages.copy()})
                         st.session_state.current_conversation = st.session_state.conversations[0]
-                    else:
-                        st.session_state.current_conversation['messages'] = st.session_state.messages.copy()
+                    else: st.session_state.current_conversation['messages'] = st.session_state.messages.copy()
                     st.rerun()
