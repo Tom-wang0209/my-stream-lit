@@ -8,10 +8,10 @@ import re
 import random
 from datetime import datetime
 
-# 设置 Streamlit 页面基础配置（必须是第一个 Streamlit 命令）
+# 设置 Streamlit 页面基础配置
 st.set_page_config(
-    page_title="Code Hub - 极客代码枢纽中心",
-    page_icon="🚀",
+    page_title="Code Hub - 代码中心",
+    page_icon="None",
     layout="wide",
     initial_sidebar_state="expanded"
 )
@@ -19,15 +19,15 @@ st.set_page_config(
 # ==========================================
 # 1. 核心安全配置与初始化
 # ==========================================
-# 强制使用 secrets 获取凭证，确保线上生产环境凭证绝对隔离
+# 从配置文件中获取数据库和API密钥
 DB_CONN_STRING = st.secrets["postgres"]["connection_string"]
 DEEPSEEK_API_KEY = st.secrets["deepseek"]["api_key"]
 
-# DeepSeek API 端点
+# DeepSeek API 请求地址
 DEEPSEEK_API_URL = "https://api.deepseek.com/chat/completions"
 
 # ==========================================
-# 2. 极客感动态视觉主题系统 (CSS 注入)
+# 2. 视觉主题系统 (CSS 注入)
 # ==========================================
 BLACK_THEME = """
 <style>
@@ -156,7 +156,6 @@ STARRY_THEME = """
 <script>
 const container = document.getElementById('star-container');
 if (container && container.children.length === 0) {
-    // 生成星星
     for(let i=0; i<100; i++) {
         const star = document.createElement('div');
         star.className = 'star';
@@ -169,7 +168,6 @@ if (container && container.children.length === 0) {
         star.style.setProperty('--opacity', Math.random());
         container.appendChild(star);
     }
-    // 生成流星
     for(let i=0; i<3; i++) {
         const meteor = document.createElement('div');
         meteor.className = 'meteor';
@@ -243,10 +241,10 @@ def init_database():
         conn.close()
 
 # ==========================================
-# 4. 安全认证逻辑
+# 4. 用户登录与注册逻辑
 # ==========================================
 def hash_password(password, username):
-    # 加盐哈希安全防线：SHA256(password + username)
+    # 对密码进行加盐哈希加密，不保存明文密码
     salted = password + username
     return hashlib.sha256(salted.encode()).hexdigest()
 
@@ -257,7 +255,7 @@ def register_user(username, password):
     try:
         cur = conn.cursor()
         pwd_hash = hash_password(password, username)
-        # 使用占位符强制防御 SQL 注入
+        # 使用参数化查询防止 SQL 注入
         cur.execute(
             "INSERT INTO ch_users (username, password_hash) VALUES (%s, %s)",
             (username, pwd_hash)
@@ -267,7 +265,7 @@ def register_user(username, password):
         return True, "注册成功"
     except psycopg2.IntegrityError:
         conn.rollback()
-        return False, "用户名已存在"
+        return False, "该用户名已经被注册了"
     except Exception as e:
         conn.rollback()
         return False, str(e)
@@ -297,7 +295,7 @@ def login_user_db(username, password):
         conn.close()
 
 # ==========================================
-# 5. 会话管理逻辑
+# 5. 会话历史管理
 # ==========================================
 def save_conversation(user_id, title, messages_json, tab_index):
     conn = get_connection()
@@ -318,7 +316,7 @@ def save_conversation(user_id, title, messages_json, tab_index):
         cur.close()
         return new_id
     except Exception as e:
-        st.error(f"保存会话失败: {e}")
+        st.error(f"保存聊天记录失败: {e}")
         conn.rollback()
         return None
     finally:
@@ -343,7 +341,7 @@ def load_conversations(user_id):
         cur.close()
         return rows
     except Exception as e:
-        st.error(f"加载会话失败: {e}")
+        st.error(f"加载聊天记录失败: {e}")
         return []
     finally:
         conn.close()
@@ -358,13 +356,13 @@ def delete_conversation(conv_id):
         conn.commit()
         cur.close()
     except Exception as e:
-        st.error(f"删除会话失败: {e}")
+        st.error(f"删除聊天记录失败: {e}")
         conn.rollback()
     finally:
         conn.close()
 
 # ==========================================
-# 6. 讨论区逻辑
+# 6. 讨论区帖子管理
 # ==========================================
 def post_discussion(user_id, username, title, code_content):
     conn = get_connection()
@@ -382,7 +380,7 @@ def post_discussion(user_id, username, title, code_content):
         conn.commit()
         cur.close()
     except Exception as e:
-        st.error(f"发布讨论失败: {e}")
+        st.error(f"发布帖子失败: {e}")
         conn.rollback()
     finally:
         conn.close()
@@ -407,7 +405,7 @@ def search_discussions(query):
         cur.close()
         return rows
     except Exception as e:
-        st.error(f"搜索失败: {e}")
+        st.error(f"搜索帖子失败: {e}")
         return []
     finally:
         conn.close()
@@ -429,7 +427,7 @@ def archive_discussion(disc_id, archive_id):
         conn.commit()
         cur.close()
     except Exception as e:
-        st.error(f"归档失败: {e}")
+        st.error(f"归档帖子失败: {e}")
         conn.rollback()
     finally:
         conn.close()
@@ -461,13 +459,13 @@ def export_all_discussions():
             })
         return json.dumps(data, indent=2, ensure_ascii=False)
     except Exception as e:
-        st.error(f"导出失败: {e}")
+        st.error(f"导出数据失败: {e}")
         return "{}"
     finally:
         conn.close()
 
 # ==========================================
-# 7. DeepSeek API 调用
+# 7. DeepSeek AI 接口调用
 # ==========================================
 def call_deepseek_api(messages, model="deepseek-chat"):
     headers = {
@@ -485,23 +483,23 @@ def call_deepseek_api(messages, model="deepseek-chat"):
         data = response.json()
         return data["choices"][0]["message"]["content"]
     except requests.exceptions.RequestException as e:
-        return f"API 调用失败: {e}"
+        return f"人工智能接口连接失败: {e}"
     except Exception as e:
-        return f"解析响应失败: {e}"
+        return f"数据解析失败: {e}"
 
 # ==========================================
-# 8. 本地代码质检算法
+# 8. 本地代码检查算法
 # ==========================================
 def analyze_code_locally(code, language):
     lines = code.split('\n')
     total_lines = len(lines)
     effective_lines = [line for line in lines if line.strip() and not line.strip().startswith('#')]
     
-    # 检测未清理的调试性 print
+    # 检查代码里有没有未删除的调试输出 print
     print_pattern = re.compile(r'\bprint\s*\(')
     prints = [(i+1, line) for i, line in enumerate(lines) if print_pattern.search(line)]
     
-    # 检测 TODO 挂起标记
+    # 检查代码里有没有未完成的 TODO 标记
     todo_pattern = re.compile(r'\bTODO\b')
     todos = [(i+1, line) for i, line in enumerate(lines) if todo_pattern.search(line)]
     
@@ -515,10 +513,10 @@ def analyze_code_locally(code, language):
     return analysis
 
 # ==========================================
-# 9. Streamlit 应用主体
+# 9. 网页程序主体
 # ==========================================
 def main():
-    # 初始化全局状态变量（Session State）
+    # 初始化网页状态变量
     if 'theme' not in st.session_state:
         st.session_state.theme = 'BLACK_THEME'
     if 'user_id' not in st.session_state:
@@ -534,7 +532,7 @@ def main():
     if 'search_query_val' not in st.session_state:
         st.session_state.search_query_val = ""
 
-    # 动态应用前端主题环境
+    # 加载用户选择的网页主题样式
     if st.session_state.theme == 'BLACK_THEME':
         st.markdown(BLACK_THEME, unsafe_allow_html=True)
     elif st.session_state.theme == 'WHITE_THEME':
@@ -542,43 +540,43 @@ def main():
     elif st.session_state.theme == 'STARRY_THEME':
         st.markdown(STARRY_THEME, unsafe_allow_html=True)
 
-    # 自动建表与自适应健康检查
+    # 自动检查并创建数据库表
     init_database()
 
     # ------------------------------------------
-    # 顶部横向紧凑工具栏布局设计
+    # 顶部工具栏排版
     # ------------------------------------------
     col1, col2, col3, col4, col5 = st.columns([4.5, 1.4, 1.5, 1.1, 4.5])
     
     with col1:
-        st.markdown("<h2 style='margin:0; padding:0;'>🚀 Code Hub枢纽站</h2>", unsafe_allow_html=True)
+        st.markdown("<h2 style='margin:0; padding:0;'>Code Hub 代码中心</h2>", unsafe_allow_html=True)
         
     with col2:
         model_options = ['deepseek-chat', 'deepseek-reasoning']
         selected_idx = 0 if st.session_state.selected_model == 'deepseek-chat' else 1
-        model_select = st.selectbox("Model", model_options, index=selected_idx, label_visibility="collapsed")
+        model_select = st.selectbox("AI模型选择", model_options, index=selected_idx, label_visibility="collapsed")
         if model_select != st.session_state.selected_model:
             st.session_state.selected_model = model_select
 
     with col3:
-        with st.popover("⚙️ Guide 机制指南"):
+        with st.popover("使用指南与说明"):
             st.markdown("""
-            ### 📚 Code Hub 系统功能导视
-            **1. Code Hub Workbench**
-            - 贴入代码段落、选择环境语言。
-            - 能够一键完成本地轻量级静态质检或交由 AI 全面深度重构。
-            **2. Architecture Designer**
-            - 描述多组件或多阶段的全栈架构设计需求。
-            - 交付完备的技术演进指南及蓝图。
-            **3. Discussion Board**
-            - 供同学进行日常技术研讨，发布核心组件代码。
-            - 带有冷备份物理归档保护机制。
+            ### 功能使用指南
+            **1. 代码工作台**
+            - 贴入你的代码，选择对应的语言。
+            - 可以一键进行本地轻量化代码质量检查，或者让人工智能帮你重构和优化代码。
+            **2. 架构设计器**
+            - 在这里输入你的系统架构设计需求。
+            - 人工智能会为你生成详细的技术方案和架构设计蓝图。
+            **3. 技术讨论区**
+            - 大家可以在这里发布平时积累的技术心得或核心代码组件。
+            - 带有离线安全备份功能，防止云端空间占用过多。
             """)
 
     with col4:
         theme_options = ['BLACK_THEME', 'WHITE_THEME', 'STARRY_THEME']
         current_idx = theme_options.index(st.session_state.theme)
-        theme_select = st.selectbox("Theme", theme_options, index=current_idx, label_visibility="collapsed")
+        theme_select = st.selectbox("主题切换", theme_options, index=current_idx, label_visibility="collapsed")
         if theme_select != st.session_state.theme:
             st.session_state.theme = theme_select
             st.rerun()
@@ -586,15 +584,15 @@ def main():
     with col5:
         if st.session_state.user_id:
             cols_user = st.columns([2, 1])
-            cols_user[0].markdown(f"<p style='margin-top:10px;'>👤 <b>{st.session_state.username}</b></p>", unsafe_allow_html=True)
-            if cols_user[1].button("退出"):
+            cols_user[0].markdown(f"<p style='margin-top:10px;'>欢迎回来: <b>{st.session_state.username}</b></p>", unsafe_allow_html=True)
+            if cols_user[1].button("退出登录"):
                 st.session_state.user_id = None
                 st.session_state.username = None
                 st.session_state.chat_history = []
                 st.rerun()
         else:
-            with st.popover("🔐 登录 / 注册入口"):
-                auth_tab = st.tabs(["安全登录", "新同学注册"])
+            with st.popover("登录 / 注册"):
+                auth_tab = st.tabs(["用户登录", "新用户注册"])
                 with auth_tab[0]:
                     login_user_input = st.text_input("用户名", key="login_u")
                     login_pwd_input = st.text_input("密码", type="password", key="login_p")
@@ -604,14 +602,14 @@ def main():
                             if user_data:
                                 st.session_state.user_id = user_data["id"]
                                 st.session_state.username = user_data["username"]
-                                st.success("鉴权通过，正在进入系统...")
+                                st.success("登录成功，正在进入系统...")
                                 st.rerun()
                             else:
-                                st.error("密码校验失败或用户未注册")
+                                st.error("用户名或密码错误，或者你还没有注册")
                 with auth_tab[1]:
-                    reg_user_input = st.text_input("注册用户名", key="reg_u")
-                    reg_pwd_input = st.text_input("初始密码", type="password", key="reg_p")
-                    if st.button("提交注册申请", use_container_width=True):
+                    reg_user_input = st.text_input("注册账号名", key="reg_u")
+                    reg_pwd_input = st.text_input("设置密码", type="password", key="reg_p")
+                    if st.button("提交注册", use_container_width=True):
                         if reg_user_input and reg_pwd_input:
                             success, msg = register_user(reg_user_input, reg_pwd_input)
                             if success:
@@ -622,29 +620,29 @@ def main():
     st.divider()
 
     # ------------------------------------------
-    # 强制用户登录状态拦截器
+    # 未登录状态的拦截页面
     # ------------------------------------------
     if not st.session_state.user_id:
         st.markdown("""
         <div style="text-align: center; padding: 120px 20px;">
-            <h1 style="font-size: 3.5rem; color: #00ff88; margin-bottom: 20px;">🔒 访问受限</h1>
-            <p style="font-size: 1.4rem; color: #a0a0b0;">当前系统处于线上高隔离生产安全级别，非登录状态主体已被自动拦截。</p>
-            <p style="font-size: 1.1rem; color: #666677;">请通过右上角快捷浮窗验证登录身份，以开启全功能工作台。</p>
+            <h1 style="font-size: 3.5rem; color: #00ff88; margin-bottom: 20px;">请先登录</h1>
+            <p style="font-size: 1.4rem; color: #a0a0b0;">当前系统处于私有安全保护状态，未登录用户无法查看内容。</p>
+            <p style="font-size: 1.1rem; color: #666677;">请点击右上角的“登录 / 注册”按钮登录你的账号，解锁全部功能工作台。</p>
         </div>
         """, unsafe_allow_html=True)
         st.stop()
 
     # ------------------------------------------
-    # 侧边栏：多会话云端管理
+    # 侧边栏：多会话云端历史管理
     # ------------------------------------------
     with st.sidebar:
-        st.markdown("### 💬 云端历史对话")
-        if st.button("➕ 新建干净工作流", use_container_width=True):
+        st.markdown("### 云端历史对话")
+        if st.button("开启新对话", use_container_width=True):
             st.session_state.chat_history = []
             st.rerun()
             
         st.markdown("---")
-        # 实时从云端动态加载专属于当前 user_id 的会话列表
+        # 自动获取当前登录用户的会话列表
         history = load_conversations(st.session_state.user_id)
         if history:
             for conv in history:
@@ -652,84 +650,84 @@ def main():
                 col_a, col_b = st.columns([5, 1.2])
                 with col_a:
                     display_title = title[:15] + "..." if len(title) > 15 else title
-                    if st.button(f"📄 {display_title}", key=f"load_{conv_id}", use_container_width=True):
+                    if st.button(f"文本: {display_title}", key=f"load_{conv_id}", use_container_width=True):
                         st.session_state.chat_history = json.loads(messages_json) if messages_json else []
-                        st.info(f"已拉取云端历史记录")
+                        st.info("已成功加载历史聊天记录")
                 with col_b:
-                    if st.button("🗑️", key=f"del_{conv_id}", help="物理擦除该会话"):
+                    if st.button("删除", key=f"del_{conv_id}", help="彻底删除这条历史记录"):
                         delete_conversation(conv_id)
                         st.rerun()
         else:
-            st.info("云端暂无活跃会话记录")
+            st.info("暂无历史对话记录")
 
     # ------------------------------------------
-    # 主区域：三大核心功能工作台
+    # 主区域：功能切换卡
     # ------------------------------------------
     tab1, tab2, tab3 = st.tabs([
-        "🛠️ Code Hub Workbench (代码工作台)", 
-        "🏗️ Architecture Designer (架构设计器)", 
-        "💬 Discussion Board (极客讨论区)"
+        "代码工作台 (Workbench)", 
+        "架构设计器 (Designer)", 
+        "技术讨论区 (Board)"
     ])
 
-    # --- Tab 1: Code Hub Workbench ---
+    # --- Tab 1: 代码工作台 ---
     with tab1:
-        st.markdown("### 🛠️ 全自动化代码重构与质量合规质检")
+        st.markdown("### 代码优化重构与本地合规检查")
         col_left, col_right = st.columns([1, 1])
         
         with col_left:
-            code_input = st.text_area("粘贴需要处理的原始代码块", height=320, key="workbench_code_area")
-            lang_select = st.selectbox("指定解析语言环境", ["Python", "JavaScript", "Java", "C++", "Go", "Other"])
+            code_input = st.text_area("在此粘贴你需要处理的原始代码", height=320, key="workbench_code_area")
+            lang_select = st.selectbox("选择代码的编程语言", ["Python", "JavaScript", "Java", "C++", "Go", "Other"])
             
-            if st.button("🔍 执行本地静态算法质检", use_container_width=True):
+            if st.button("开始本地静态检查", use_container_width=True):
                 if code_input.strip():
                     analysis = analyze_code_locally(code_input, lang_select)
-                    st.markdown("#### 📊 静态扫描核心度量指标")
+                    st.markdown("#### 代码基础数据统计")
                     metric_c1, metric_c2 = st.columns(2)
-                    metric_c1.metric("物理总行数", analysis["total_lines"])
-                    metric_c2.metric("有效逻辑行", analysis["effective_lines"])
+                    metric_c1.metric("总行数", analysis["total_lines"])
+                    metric_c2.metric("有效逻辑行数", analysis["effective_lines"])
                     
                     if analysis["prints"]:
-                        st.warning(f"⚠️ 静态引擎拦截到 {len(analysis['prints'])} 处未清理的 print 调试残留：")
+                        st.warning(f"注意：在代码中发现了 {len(analysis['prints'])} 处未清理的测试输出语句(print)：")
                         for line_num, line in analysis["prints"]:
-                            st.text(f"Line {line_num}: {line.strip()}")
+                            st.text(f"第 {line_num} 行: {line.strip()}")
                     if analysis["todos"]:
-                        st.info(f"📌 系统捕获到 {len(analysis['todos'])} 处未完结的 TODO 挂起标记：")
+                        st.info(f"提示：代码中包含 {len(analysis['todos'])} 处待办标记(TODO)：")
                         for line_num, line in analysis["todos"]:
-                            st.text(f"Line {line_num}: {line.strip()}")
+                            st.text(f"第 {line_num} 行: {line.strip()}")
                     if not analysis["prints"] and not analysis["todos"]:
-                        st.success("🎉 静态代码健康度优异，未发现明显的缺陷残留。")
+                        st.success("检查完毕，代码编写规范，未发现明显的临时调试残留。")
                 else:
-                    st.warning("工作台拒绝接收空数据，请录入有效代码。")
+                    st.warning("输入框为空，请输入有效代码再点击检查。")
                     
         with col_right:
-            if st.button("🤖 触发 DeepSeek AI 重构进化", use_container_width=True):
+            if st.button("让 AI 帮你优化和重构代码", use_container_width=True):
                 if code_input.strip():
-                    with st.spinner("DeepSeek 深度模型正在重构推演中..."):
-                        prompt_content = f"请帮我重构和优化以下 {lang_select} 代码：\n{code_input}\n\n要求：\n1. 提高代码可读性和可维护性\n2. 提升运行时整体效率\n3. 添加明晰的防御性断言与核心注释\n4. 遵循企业级设计最佳实践。"
+                    with st.spinner("人工智能正在为你重构和编写更优方案..."):
+                        prompt_content = f"请帮我重构和优化以下 {lang_select} 代码：\n{code_input}\n\n要求：\n1. 提高代码可读性和可维护性\n2. 提升运行时整体效率\n3. 添加明晰的异常处理与核心注释说明。"
                         messages = [
-                            {"role": "system", "content": "你是一位拥有殿堂级造诣的代码重构专家与首席技术架构师。"},
+                            {"role": "system", "content": "你是一位优秀的资深代码重构专家。"},
                             {"role": "user", "content": prompt_content}
                         ]
                         response = call_deepseek_api(messages, st.session_state.selected_model)
-                        st.markdown("#### 🌟 优化演进后版本")
+                        st.markdown("#### AI 优化后的代码版本")
                         st.code(response, language=lang_select.lower())
                         
-                        # 同步归档进会话历史并同步至 PostgreSQL
-                        st.session_state.chat_history.append({"role": "user", "content": f"[代码重构] 语言环境: {lang_select}\n源码:\n{code_input}"})
+                        # 自动将记录同步保存到数据库中
+                        st.session_state.chat_history.append({"role": "user", "content": f"[优化代码] 语言: {lang_select}\n源码:\n{code_input}"})
                         st.session_state.chat_history.append({"role": "assistant", "content": response})
                         save_conversation(
                             st.session_state.user_id,
-                            f"代码重构 - {datetime.now().strftime('%H:%M')}",
+                            f"代码优化 - {datetime.now().strftime('%H:%M')}",
                             json.dumps(st.session_state.chat_history),
                             0
                         )
                 else:
-                    st.warning("请在左侧区域先填充原始源码。")
+                    st.warning("请在左侧文本框内先输入你的源代码。")
 
-        # 实时渲染当前内存空间留存的会话记录
+        # 渲染当前对话的聊天历史
         if st.session_state.chat_history:
             st.divider()
-            st.markdown("#### 📜 当前工作会话全量快照")
+            st.markdown("#### 当前会话的全部记录")
             for msg in st.session_state.chat_history:
                 if msg["role"] == "user":
                     with st.chat_message("user"):
@@ -738,25 +736,25 @@ def main():
                     with st.chat_message("assistant"):
                         st.write(msg["content"])
 
-    # --- Tab 2: Architecture Designer ---
+    # --- Tab 2: 架构设计器 ---
     with tab2:
-        st.markdown("### 🏗️ 生产级分布式高并发系统架构蓝图生成器")
+        st.markdown("### 系统方案与高并发架构设计器")
         arch_input = st.text_area(
-            "输入全栈技术架构诉求描述", 
+            "请输入你的系统需求和架构规划想法", 
             height=180, 
-            placeholder="例如：请规划一套支持亿级日活、低延迟的跨境电商优惠券秒杀系统方案，需确保核心数据最终一致性...",
+            placeholder="例如：请帮我设计一个支持高并发、低延迟的电商秒杀系统的优惠券方案...",
             key="arch_designer_input"
         )
         
-        if st.button("🏗️ 启动 DeepSeek 深度建模演进", use_container_width=True):
+        if st.button("让 AI 生成系统架构方案", use_container_width=True):
             if arch_input.strip():
-                with st.spinner("架构演进核心模型加载中..."):
+                with st.spinner("人工智能正在构思设计方案..."):
                     messages = [
-                        {"role": "system", "content": "你是一位享誉业界的特级软件架构师，精通高并发、高可用和微服务演进蓝图规划。"},
-                        {"role": "user", "content": f"请针对以下业务及技术诉求提供详细的全栈级系统架构设计蓝图：\n{arch_input}\n\n必须全面包含以下核心组件：\n1. 最适配的技术栈选型及深度技术边界判断\n2. 高内聚低耦合的领域服务拆分与边界定义\n3. 多级存储架构设计（关系型/非关系型/分布式缓存）\n4. 高可靠物理部署架构与网络冗余隔离方案\n5. 极致水平扩展及突发尖峰演进指南机制。"}
+                        {"role": "system", "content": "你是一位资深的系统架构师，精通高并发、高性能微服务方案的设计。"},
+                        {"role": "user", "content": f"请针对以下业务及技术诉求提供详细的全栈级系统架构设计蓝图：\n{arch_input}\n\n必须全面包含以下核心组件：\n1. 技术栈选型理由\n2. 业务模块的拆分与设计\n3. 数据库与缓存的多级存储设计\n4. 系统的演进与扩容指南。"}
                     ]
                     response = call_deepseek_api(messages, st.session_state.selected_model)
-                    st.markdown("### 📐 系统拓扑及技术演进蓝图方案")
+                    st.markdown("### 系统设计及技术演进蓝图方案")
                     st.markdown(response)
                     
                     st.session_state.chat_history.append({"role": "user", "content": f"[架构规划设计请求]:\n{arch_input}"})
@@ -768,55 +766,53 @@ def main():
                         1
                     )
             else:
-                st.warning("请详尽地输入你所需的系统业务规模及基础架构演进背景。")
+                st.warning("请输入你具体的业务规模、功能诉求或技术背景描述。")
 
-    # --- Tab 3: Discussion Board ---
+    # --- Tab 3: 技术讨论区 ---
     with tab3:
-        st.markdown("### 💬 极客讨论与分布式代码资产库")
+        st.markdown("### 同学技术交流与代码讨论板")
         
-        with st.expander("📝 共享发布我的最新技术心得 / 核心组件"):
-            post_title = st.text_input("技术讨论标题", placeholder="输入技术核心摘要点")
-            post_content = st.text_area("正文描述或核心实现源码块", height=150)
-            if st.button("打包广播发布", use_container_width=True):
+        with st.expander("点击展开：发布我的技术心得或代码组件"):
+            post_title = st.text_input("帖子标题", placeholder="请输入简短明确的技术标题")
+            post_content = st.text_area("技术描述或你的核心代码块", height=150)
+            if st.button("确认发布到讨论区", use_container_width=True):
                 if post_title.strip() and post_content.strip():
                     post_discussion(st.session_state.user_id, st.session_state.username, post_title, post_content)
-                    st.success("信息资产发布成功，全局索引已更新！")
+                    st.success("发布成功，大家已经可以看到你的分享了！")
                     st.rerun()
                 else:
-                    st.error("标题与讨论正文均不可为空白字符。")
+                    st.error("帖子的标题和内容都不能为空。")
         
         st.divider()
         
-        # 搜索与资产冷备份管理屏障
+        # 搜索与资产管理
         col_search, col_admin = st.columns([3.5, 1.5])
         with col_search:
-            search_input_val = st.text_input("🔍 全局参数化模糊搜索 (安全防注入匹配)", key="search_box")
-            if st.button("激活搜索路由", use_container_width=True):
+            search_input_val = st.text_input("输入关键词进行安全搜索", key="search_box")
+            if st.button("开始搜索", use_container_width=True):
                 st.session_state.search_clicked = True
                 st.session_state.search_query_val = search_input_val
         
         with col_admin:
-            st.markdown("<p style='margin:0; font-size:0.8rem; color:#888;'>物理归档与审计管理</p>", unsafe_allow_html=True)
-            if st.button("📥 一键冷导出全量讨论 (JSON)", use_container_width=True):
+            st.markdown("<p style='margin:0; font-size:0.8rem; color:#888;'>数据备份中心</p>", unsafe_allow_html=True)
+            if st.button("导出全量讨论数据 (JSON)", use_container_width=True):
                 data_json = export_all_discussions()
                 st.download_button(
-                    label="📂 点击下载备份文件",
+                    label="点击下载生成的备份文件",
                     data=data_json,
-                    file_name=f"discussions_archive_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json",
+                    file_name=f"discussions_backup_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json",
                     mime="application/json"
                 )
 
-        # 渲染底层讨论区看板
-        st.markdown("#### ⚡ 活跃技术风向标看板")
+        # 渲染下方的讨论区帖子列表
+        st.markdown("#### 社区最新技术分享")
         
-        # 动态筛选路由逻辑
         if st.session_state.search_clicked and st.session_state.search_query_val:
             discussions = search_discussions(st.session_state.search_query_val)
-            st.caption(f"当前处于搜索模式，关键词：`{st.session_state.search_query_val}`，命中了 {len(discussions)} 条数据。")
-            # 重置单次点击状态以便下一次变更
+            st.caption(f"当前处于搜索状态，关键词：`{st.session_state.search_query_val}`，共找到 {len(discussions)} 条相关内容。")
             st.session_state.search_clicked = False
         else:
-            # 默认状态下回退拉取最近的20条生产活跃日志
+            # 默认状态下展示最近发布的20条帖子
             discussions = []
             conn = get_connection()
             if conn:
@@ -831,32 +827,32 @@ def main():
                     discussions = cur.fetchall()
                     cur.close()
                 except Exception as e:
-                    st.error(f"加载讨论板错误: {e}")
+                    st.error(f"加载帖子失败: {e}")
                 finally:
                     conn.close()
 
-        # 开始卡片渲染循环
+        # 循环绘制帖子
         if discussions:
             for disc in discussions:
                 disc_id, username, title, content, is_archived, archive_id, created_at = disc
                 with st.container():
-                    st.markdown(f"#### 📄 {title}")
-                    st.caption(f"🚀 贡献者: `{username}` | 🕒 广播时间: {created_at}")
+                    st.markdown(f"#### 标题: {title}")
+                    st.caption(f"发布人: `{username}` | 发布时间: {created_at}")
                     
-                    # 冷备份清空屏蔽安全机制校验
+                    # 如果帖子已经被管理员归档离线
                     if is_archived:
-                        st.warning(f"📦 [安全隔离提示：该核心代码资产已通过冷备份安全技术迁移至物理离线硬盘。请联系技术统筹处调取全局编号: {archive_id}]")
+                        st.warning(f"该代码内容已被管理员移动至物理离线硬盘保存。如需查看，请联系管理员并提供归档编号: {archive_id}")
                     else:
                         st.code(content, language="python")
-                        # 归档拦截触发组件
-                        if st.button(f"🔒 物理冷归档此资产", key=f"archive_btn_{disc_id}"):
+                        # 归档按钮
+                        if st.button(f"对该帖子执行离线归档", key=f"archive_btn_{disc_id}"):
                             generated_arc_id = f"ARC-{datetime.now().strftime('%Y%m%d')}-{random.randint(10000, 99999)}"
                             archive_discussion(disc_id, generated_arc_id)
-                            st.success(f"冷备份成功。物理序列归档号: {generated_arc_id}")
+                            st.success(f"归档成功。该内容的调取编号为: {generated_arc_id}")
                             st.rerun()
                     st.markdown("<hr style='border:0.5px dashed rgba(255,255,255,0.1);'>", unsafe_allow_html=True)
         else:
-            st.info("数据层当前未检索到任何符合讨论范围的代码或心得分享。")
+            st.info("当前讨论区没有找到任何技术分享。")
 
 if __name__ == "__main__":
     main()
