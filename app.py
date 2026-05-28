@@ -26,7 +26,6 @@ DEEPSEEK_API_URL = "https://api.deepseek.com/chat/completions"
 # ==========================================
 # 2. 视觉主题与高精对齐系统 (CSS 注入)
 # ==========================================
-# 增加全局组件对齐样式，强制让输入框、下拉菜单、按钮的高度和文字排在同一水平线上，保持一行展示
 ALIGNMENT_CSS = """
 <style>
 /* 统一对齐与单行高度控制 */
@@ -707,11 +706,23 @@ def main():
             if st.button("调用 AI 执行性能重构", use_container_width=True):
                 if code_input.strip():
                     with st.spinner("生产级演进重构中..."):
-                        prompt_content = f"请帮我重构和优化以下 {lang_select} 代码：\n{code_input}\n\n要求：\n1. 提高代码可读性和可维护性\n2. 提升运行时整体效率\n3. 添加明晰的异常处理与核心注释说明。"
+                        # ==========================================
+                        # 优化：强冷淡系统提示词，彻底规避繁琐与每一句的脚注
+                        # ==========================================
+                        system_instruction = """你是一个高冷的代码编译器，信奉极简主义。
+【铁律】：
+1. 必须只输出 Markdown 格式的纯净代码块，不准附带任何解释。
+2. 严禁输出任何代码外部的文字、脚注、前言或总结。
+3. 严格限制注释：代码内部的注释率必须低于 5%，只允许在最晦涩处写单行注释。
+4. 杜绝过度设计：拒绝一切不必要的变量声明和过度封装。"""
+
+                        user_instruction = f"请直接优化并重构以下 {lang_select} 源码，不准留下任何脚注或字外解释：\n{code_input}"
+
                         messages = [
-                            {"role": "system", "content": "你是一位优秀的资深代码重构专家。"},
-                            {"role": "user", "content": prompt_content}
+                            {"role": "system", "content": system_instruction.strip()},
+                            {"role": "user", "content": user_instruction.strip()}
                         ]
+                        
                         response = call_deepseek_api(messages, st.session_state.selected_model)
                         st.markdown("#### 优化后的推荐版本")
                         st.code(response, language=lang_select.lower())
@@ -751,10 +762,22 @@ def main():
         if st.button("启动大模型方案推演", use_container_width=True):
             if arch_input.strip():
                 with st.spinner("系统拓扑与解耦推演中..."):
+                    # ==========================================
+                    # 优化：强实用主义架构师提示词，杜绝车轱辘话和零碎脚注
+                    # ==========================================
+                    system_arch_instruction = """你是一位崇尚实用主义、言简意赅的资深系统架构师。
+【铁律】：
+1. 严禁使用任何形式的页面底部脚注。
+2. 严禁学术化的长篇大论，直接使用 Markdown 表格、高干货列表输出解耦模块。
+3. 方案仅包含核心拓扑栈、数据库多级存储以及确定的集群扩容步骤，去掉废话。"""
+
+                    user_arch_instruction = f"请针对以下业务及技术诉求直接提供高并发架构设计蓝图，拒绝任何多余脚注：\n{arch_input}"
+
                     messages = [
-                        {"role": "system", "content": "你是一位资深的系统架构师，精通高并发、高性能微服务方案的设计。"},
-                        {"role": "user", "content": f"请针对以下业务及技术诉求提供详细的全栈级系统架构设计蓝图：\n{arch_input}\n\n必须全面包含以下核心组件：\n1. 技术栈选型理由\n2. 业务模块的拆分与设计\n3. 数据库与缓存的多级存储设计\n4. 系统的演进与扩容指南。"}
+                        {"role": "system", "content": system_arch_instruction.strip()},
+                        {"role": "user", "content": user_arch_instruction.strip()}
                     ]
+                    
                     response = call_deepseek_api(messages, st.session_state.selected_model)
                     st.markdown("### 技术演进蓝图与方案细节")
                     st.markdown(response)
