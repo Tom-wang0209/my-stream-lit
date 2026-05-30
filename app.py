@@ -16,23 +16,11 @@ from typing import List, Dict, Optional, Tuple
 
 # ====== [重要：请填写你的 API 密钥] ======
 # DeepSeek API 密钥 (从 https://platform.deepseek.com/ 获取)
-DEEPSEEK_API_KEY = ""  # [请在这里粘贴你的 DeepSeek API Key]
-
-# Moonshot (Kimi) API 密钥 (从 https://platform.moonshot.cn/ 获取)
-MOONSHOT_API_KEY = ""  # [请在这里粘贴你的 Moonshot API Key]
-
-# ====== [线上部署时请将密钥存放在 Streamlit Secrets 中] ======
-# 在 Streamlit Community Cloud 中：
-# 1. 登录你的部署后台
-# 2. 点击 "Secrets" -> "Manage secrets"
-# 3. 添加名为 "DEEPSEEK_API_KEY" 和 "MOONSHOT_API_KEY" 的密钥
-# 如果使用 Secrets，则上面的空字符串会被自动覆盖
+DEEPSEEK_API_KEY = "sk-2e47bcfcac594ab58a3da77600210914"  # [请在这里粘贴你的 DeepSeek API Key]
 
 # 从 Streamlit Secrets 读取密钥（优先级更高）
 if "DEEPSEEK_API_KEY" in st.secrets:
     DEEPSEEK_API_KEY = st.secrets["DEEPSEEK_API_KEY"]
-if "MOONSHOT_API_KEY" in st.secrets:
-    MOONSHOT_API_KEY = st.secrets["MOONSHOT_API_KEY"]
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # [系统配置与常量]
