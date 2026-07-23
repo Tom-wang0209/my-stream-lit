@@ -1750,11 +1750,11 @@ def render_main_page(auth_manager: AuthManager, ai_provider: AIProvider,
 
         for session in filtered_history:
             with st.expander(
-                f"**{session['title'][:30]}**\n\n` +
+                f"**{session['title'][:30]}**\n\n" +
                 f"{CLOCK} {session['timestamp']}\n" +
                 f"对话 {len(session.get('messages', []))} 条消息",
-                expanded=False
-            ):
+                expanded=True
+            )
                 # 切换到该会话
                 if st.button(f"{MESSAGE} 查看对话", key=f"load_session_{session['id']}"):
                     st.session_state['messages'] = session.get('messages', [
