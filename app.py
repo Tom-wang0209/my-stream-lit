@@ -37,7 +37,6 @@ st.set_page_config(
 # CSS 样式注入 - 暗黑科技风（低饱和度）
 st.markdown("""
 <style>
-/* ====== 主题色配置 - 暗黑科技感 ====== */
 :root {
     --primary: #60809a;
     --primary-hover: #4a6a80;
